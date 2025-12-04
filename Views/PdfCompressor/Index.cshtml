@@ -1,0 +1,179 @@
+﻿@model PdfUploadViewModel
+@{
+    ViewData["Title"] = "PDF Compressor";
+}
+
+<div class="container py-5 text-center">
+    <h2 class="fw-bold mb-3">📄 PDF Compressor</h2>
+    <p class="text-muted">Drag & drop a PDF below or click to browse.</p>
+
+    <form id="uploadForm" enctype="multipart/form-data" method="post" asp-action="Compress">
+        <div id="dropZone" class="drop-zone">
+            <input asp-for="PdfFile" id="pdfInput" type="file" accept=".pdf" hidden />
+
+            <div id="dropMessage">
+                <i class="bi bi-cloud-upload fs-1 text-secondary"></i>
+                <p>Drag & Drop PDF here<br>or <a href="#" id="browseLink">browse</a></p>
+            </div>
+
+            <div id="filePreview" class="file-preview d-none">
+                <p id="fileName" class="fw-semibold"></p>
+                <iframe id="previewFrame" class="pdf-preview"></iframe>
+            </div>
+        </div>
+    </form>
+
+    <div id="progressSection" class="progress-section d-none">
+        <p id="progressText">Compressing your document...</p>
+        <div class="progress">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <div id="successSection" class="success-section d-none">
+        <div class="success-animation">
+            <i class="bi bi-check-circle-fill text-success fs-1"></i>
+            <p>Now downloading...</p>
+        </div>
+    </div>
+
+    @if (ViewBag.Message != null)
+    {
+        <div class="alert alert-danger mt-3">@ViewBag.Message</div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        const dropZone = document.getElementById("dropZone");
+        const pdfInput = document.getElementById("pdfInput");
+        const browseLink = document.getElementById("browseLink");
+        const filePreview = document.getElementById("filePreview");
+        const fileNameDisplay = document.getElementById("fileName");
+        const previewFrame = document.getElementById("previewFrame");
+        const progressSection = document.getElementById("progressSection");
+        const progressBar = document.querySelector(".progress-bar");
+        const successSection = document.getElementById("successSection");
+        const progressText = document.getElementById("progressText");
+
+        browseLink.addEventListener("click", e => {
+            e.preventDefault();
+            pdfInput.click();
+        });
+
+        dropZone.addEventListener("dragover", e => {
+            e.preventDefault();
+            dropZone.classList.add("drag-over");
+        });
+
+        dropZone.addEventListener("dragleave", e => {
+            dropZone.classList.remove("drag-over");
+        });
+
+        dropZone.addEventListener("drop", e => {
+            e.preventDefault();
+            dropZone.classList.remove("drag-over");
+            if (e.dataTransfer.files.length) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        pdfInput.addEventListener("change", e => {
+            if (e.target.files.length) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            if (file.type !== "application/pdf") {
+                alert("Please upload a valid PDF file.");
+                return;
+            }
+
+            filePreview.classList.remove("d-none");
+            fileNameDisplay.textContent = file.name;
+
+            const fileReader = new FileReader();
+            fileReader.onload = e => {
+                previewFrame.src = e.target.result;
+            };
+            fileReader.readAsDataURL(file);
+
+            uploadFile(file);
+        }
+
+        async function uploadFile(file) {
+            progressSection.classList.remove("d-none");
+            progressBar.style.width = "0%";
+            progressText.textContent = "Compressing your document...";
+
+            const formData = new FormData();
+            formData.append("PdfFile", file);
+
+            const response = await fetch('@Url.Action("Compress", "PdfCompressor")', {
+                method: "POST",
+                body: formData
+            });
+
+            // Animate progress bar
+            for (let i = 0; i <= 100; i += 10) {
+                await new Promise(r => setTimeout(r, 200));
+                progressBar.style.width = i + "%";
+            }
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = "compressed_" + file.name;
+
+                successSection.classList.remove("d-none");
+                progressSection.classList.add("d-none");
+
+                setTimeout(() => {
+                    link.click();
+                    successSection.classList.add("d-none");
+                }, 1500);
+            } else {
+                alert("Compression failed: " + await response.text());
+                progressSection.classList.add("d-none");
+            }
+        }
+    </script>
+}
+
+<style>
+/* Drag & Drop Area */
+.drop-zone {
+    border: 2px dashed #aaa;
+    border-radius: 15px;
+    padding: 40px;
+    transition: all 0.3s ease;
+    background: #f9f9f9;
+    cursor: pointer;
+}
+.drop-zone.drag-over {
+    border-color: #007bff;
+    background-color: #e6f0ff;
+}
+.file-preview {
+    margin-top: 20px;
+    animation: fadeIn 0.4s ease-in-out;
+}
+.pdf-preview {
+    width: 100%;
+    height: 250px;
+    border: none;
+}
+.progress-section {
+    margin-top: 25px;
+}
+.success-section {
+    margin-top: 25px;
+    animation: fadeIn 0.6s ease-in-out;
+}
+@@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
